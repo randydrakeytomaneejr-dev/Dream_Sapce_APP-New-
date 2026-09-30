@@ -85,6 +85,15 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Log the event
+      await supabase.from("activity_logs").insert({
+        action: "order_placed",
+        description: `Order ${code} placed by ${customerName || "customer"} — ${total}`,
+        order_code: code,
+        actor: "customer",
+        metadata: { item_count: lineItems.length, total },
+      });
+
       return new Response(JSON.stringify({ success: true, order }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -158,6 +167,15 @@ Deno.serve(async (req: Request) => {
         receipt_sent: true,
         updated_at: new Date().toISOString(),
       }).eq("id", orderId);
+
+      // Log the receipt event
+      await supabase.from("activity_logs").insert({
+        action: "receipt_sent",
+        description: `Receipt sent for order ${order.code} to ${order.customer_email}`,
+        order_code: order.code,
+        actor: "admin",
+        metadata: { email: order.customer_email, total: order.total },
+      });
 
       return new Response(JSON.stringify({
         success: true,

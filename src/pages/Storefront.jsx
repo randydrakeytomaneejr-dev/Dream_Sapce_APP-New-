@@ -119,6 +119,13 @@ export default function Storefront() {
     setRevComment('')
     setSelectedRating(0)
     showToast('Thank you for your rating!', 'success')
+
+    await supabase.from('activity_logs').insert({
+      action: 'review_submitted',
+      description: `${revName.trim().slice(0, 60)} left a ${selectedRating}-star rating`,
+      actor: 'customer',
+      metadata: { rating: selectedRating, review_id: data?.id },
+    })
   }
 
   const avgRating = reviews.length > 0

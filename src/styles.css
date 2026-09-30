@@ -388,6 +388,27 @@ input, textarea { font-family: inherit; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ---- Activity log ---- */
+.log-list { display: flex; flex-direction: column; gap: 0; }
+.log-entry {
+  display: flex; gap: 0.9rem; padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line); align-items: flex-start;
+}
+.log-icon { font-size: 1.2rem; flex-shrink: 0; width: 28px; text-align: center; }
+.log-content { flex: 1; min-width: 0; }
+.log-desc { font-size: 0.9rem; margin-bottom: 0.3rem; }
+.log-meta {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  font-size: 0.75rem; color: var(--sub); align-items: center;
+}
+.log-action-tag {
+  background: rgba(47,168,160,0.12); color: var(--accent);
+  border-radius: 4px; padding: 0.1rem 0.4rem; text-transform: capitalize;
+}
+.log-code { color: var(--accent); font-weight: 600; }
+.log-actor { font-style: italic; }
+.log-time { margin-left: auto; }
+
 /* ---- Receipt modal ---- */
 .receipt-modal-bg {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 150;

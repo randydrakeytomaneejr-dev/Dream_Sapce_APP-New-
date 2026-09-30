@@ -9,10 +9,12 @@ export default function AdminDashboard() {
   const { session, loading: authLoading, signOut } = useAuth()
   const navigate = useNavigate()
   const [orders, setOrders] = useState([])
+  const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
   const [receiptModal, setReceiptModal] = useState(null)
   const [sendingReceipt, setSendingReceipt] = useState(null)
+  const [activeTab, setActiveTab] = useState('orders')
 
   useEffect(() => {
     if (!authLoading && !session) navigate('/admin/login')
@@ -37,11 +39,36 @@ export default function AdminDashboard() {
     setLoading(false)
   }, [showToast])
 
+  const loadLogs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (!error) setLogs(data || [])
+  }, [])
+
+  async function logAction(action, description, orderCode, metadata = {}) {
+    await supabase.from('activity_logs').insert({
+      action,
+      description,
+      order_code: orderCode,
+      actor: session?.user?.email || 'admin',
+      metadata,
+    })
+    loadLogs()
+  }
+
   useEffect(() => {
-    if (session) loadOrders()
-  }, [session, loadOrders])
+    if (session) {
+      loadOrders()
+      loadLogs()
+    }
+  }, [session, loadOrders, loadLogs])
 
   async function updateStatus(id, status) {
+    const order = orders.find(o => o.id === id)
+    const oldStatus = order?.status || ''
     const { error } = await supabase.from('orders').update({
       status,
       updated_at: new Date().toISOString(),
@@ -53,6 +80,8 @@ export default function AdminDashboard() {
     }
 
     setOrders(orders.map(o => o.id === id ? { ...o, status } : o))
+
+    await logAction('status_changed', `${order?.code}: ${oldStatus} → ${status}`, order?.code, { old: oldStatus, new: status })
 
     if (status === 'payment confirmed') {
       await sendReceipt(id)
@@ -73,6 +102,8 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error(data.error || 'Failed to send receipt')
 
       setOrders(orders.map(o => o.id === orderId ? { ...o, receipt_sent: true, status: 'payment confirmed' } : o))
+      const order = orders.find(o => o.id === orderId)
+      await logAction('receipt_sent', `Receipt sent for ${order?.code} to ${order?.customer_email}`, order?.code, { email: order?.customer_email })
       showToast('Receipt sent to customer email', 'success')
     } catch (e) {
       showToast(e.message, 'error')
@@ -108,11 +139,16 @@ export default function AdminDashboard() {
 
       <div className="admin-body">
         <div className="admin-toolbar">
-          <h1>Orders ({orders.length})</h1>
-          <button className="refresh-btn" onClick={loadOrders}>Refresh</button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className={`tab ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => setActiveTab('orders')}>Orders ({orders.length})</button>
+            <button className={`tab ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => { setActiveTab('logs'); loadLogs() }}>Activity Log</button>
+          </div>
+          <button className="refresh-btn" onClick={() => { loadOrders(); loadLogs() }}>Refresh</button>
         </div>
 
-        {loading ? (
+        {activeTab === 'logs' ? (
+          <ActivityLogTab logs={logs} />
+        ) : loading ? (
           <div className="loading"><div className="spinner"></div>Loading orders…</div>
         ) : orders.length === 0 ? (
           <div className="empty-state">No orders yet.</div>
@@ -205,6 +241,46 @@ export default function AdminDashboard() {
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+    </div>
+  )
+}
+
+const ACTION_ICONS = {
+  order_placed: '🛒',
+  status_changed: '🔄',
+  receipt_sent: '📧',
+  review_submitted: '⭐',
+}
+
+const ACTION_COLORS = {
+  order_placed: 'var(--accent)',
+  status_changed: 'var(--gold)',
+  receipt_sent: 'var(--success)',
+  review_submitted: 'var(--gold)',
+}
+
+function ActivityLogTab({ logs }) {
+  if (logs.length === 0) {
+    return <div className="empty-state">No activity yet.</div>
+  }
+  return (
+    <div className="log-list">
+      {logs.map(log => (
+        <div key={log.id} className="log-entry">
+          <div className="log-icon" style={{ color: ACTION_COLORS[log.action] || 'var(--sub)' }}>
+            {ACTION_ICONS[log.action] || '•'}
+          </div>
+          <div className="log-content">
+            <div className="log-desc">{log.description}</div>
+            <div className="log-meta">
+              <span className="log-action-tag">{log.action.replace(/_/g, ' ')}</span>
+              {log.order_code && <span className="log-code">{log.order_code}</span>}
+              <span className="log-actor">by {log.actor}</span>
+              <span className="log-time">{new Date(log.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
